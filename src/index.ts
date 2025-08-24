@@ -24,7 +24,15 @@ class NostrResearchRelay {
 
   constructor() {
     this.app = express();
-    this.db = new Database(process.env.DATABASE_URL || './relay.db');
+    
+    // Database path - prefer DATABASE_PATH, fall back to DATABASE_URL, then default
+    const dbPath = process.env.DATABASE_PATH || 
+                  (process.env.DATABASE_URL?.startsWith('sqlite:') ? 
+                   process.env.DATABASE_URL.replace('sqlite:', '') : 
+                   process.env.DATABASE_URL) || 
+                  './relay.db';
+    
+    this.db = new Database(dbPath);
     this.pricing = new PricingService(this.db);
     this.storage = new StorageService(process.env.STORAGE_PATH);
     this.lightning = new LightningService({

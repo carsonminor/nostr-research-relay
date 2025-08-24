@@ -9,10 +9,21 @@ export class StorageService {
   }
 
   async initialize(): Promise<void> {
+    console.log(`🔧 Initializing storage at: ${this.storagePath}`);
+    
     try {
       await fs.access(this.storagePath);
-    } catch {
-      await fs.mkdir(this.storagePath, { recursive: true });
+      console.log(`✅ Storage directory exists: ${this.storagePath}`);
+    } catch (error) {
+      console.log(`📁 Creating storage directory: ${this.storagePath}`);
+      try {
+        await fs.mkdir(this.storagePath, { recursive: true });
+        console.log(`✅ Created storage directory: ${this.storagePath}`);
+      } catch (createError) {
+        console.error(`❌ Failed to create storage directory: ${this.storagePath}`);
+        console.error(`Error: ${createError}`);
+        throw new Error(`Cannot create storage directory: ${this.storagePath}. Check permissions and disk space.`);
+      }
     }
 
     // Create subdirectories for organized storage
@@ -23,8 +34,19 @@ export class StorageService {
         await fs.access(dirPath);
       } catch {
         await fs.mkdir(dirPath, { recursive: true });
-        console.log(`📁 Created storage directory: ${subdir}`);
+        console.log(`📁 Created storage subdirectory: ${subdir} at ${dirPath}`);
       }
+    }
+    
+    // Test write permissions
+    const testFile = path.join(this.storagePath, 'test_write_permissions.tmp');
+    try {
+      await fs.writeFile(testFile, 'test', 'utf8');
+      await fs.unlink(testFile);
+      console.log(`✅ Storage write permissions verified`);
+    } catch (error) {
+      console.error(`❌ Storage write test failed: ${error}`);
+      throw new Error(`Storage directory is not writable: ${this.storagePath}. Check permissions.`);
     }
   }
 

@@ -83,6 +83,52 @@ sudo ufw allow 8080
 # Windows Defender Firewall → Allow app through firewall
 ```
 
+### External Storage Drive Setup
+
+To store relay data (research papers, database, etc.) on an external drive:
+
+1. **Mount your external drive** (if not already mounted):
+```bash
+# Find your drive
+lsblk
+
+# Mount to /media (replace sdX1 with your drive)
+sudo mkdir -p /media/carsonminor/CarsonMinor1TB
+sudo mount /dev/sdX1 /media/carsonminor/CarsonMinor1TB
+
+# For permanent mounting, add to /etc/fstab:
+echo "/dev/sdX1 /media/carsonminor/CarsonMinor1TB ext4 defaults 0 2" | sudo tee -a /etc/fstab
+```
+
+2. **Configure storage paths** in your `.env` file:
+```bash
+# Storage on external drive
+STORAGE_PATH=/media/carsonminor/CarsonMinor1TB/nostr-relay-storage
+DATABASE_PATH=/media/carsonminor/CarsonMinor1TB/nostr-relay-storage/relay.db
+
+# Alternative mount points (adjust if your drive mounts differently):
+# STORAGE_PATH=/mnt/CarsonMinor1TB/nostr-relay-storage
+# STORAGE_PATH=/home/carsonminor/CarsonMinor1TB/nostr-relay-storage
+```
+
+3. **Create storage directories**:
+```bash
+# Create the storage directory structure
+sudo mkdir -p /media/carsonminor/CarsonMinor1TB/nostr-relay-storage/{papers,comments,temp,backups}
+sudo chown -R $USER:$USER /media/carsonminor/CarsonMinor1TB/nostr-relay-storage
+```
+
+4. **Test the configuration**:
+```bash
+# Check if the path is accessible
+ls -la /media/carsonminor/CarsonMinor1TB/nostr-relay-storage
+
+# Start the relay to test
+npm start
+```
+
+**Note**: All research papers, comments, database, and backups will now be stored on the external drive, ensuring they persist even if the system is reimaged.
+
 ## API Endpoints
 
 ### Public Endpoints
