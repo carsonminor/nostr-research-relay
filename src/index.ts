@@ -91,15 +91,18 @@ class NostrResearchRelay {
 
     // Start HTTP server
     const port = parseInt(process.env.PORT || '8080');
-    this.server = this.app.listen(port, () => {
-      console.log(`🚀 HTTP server running on port ${port}`);
+    const host = process.env.HOST || '0.0.0.0'; // Bind to all interfaces
+    this.server = this.app.listen(port, host, () => {
+      console.log(`🚀 HTTP server running on http://${host}:${port}`);
+      console.log(`🌐 Accessible from network at http://<your-ip>:${port}`);
     });
 
     // Setup WebSocket server
     this.wss = new WebSocket.Server({ server: this.server });
     this.setupWebSocket();
 
-    console.log(`🔗 WebSocket server running on ws://localhost:${port}`);
+    console.log(`🔗 WebSocket server running on ws://${host}:${port}`);
+    console.log(`🔗 WebSocket accessible from network at ws://<your-ip>:${port}`);
   }
 
   private setupWebSocket(): void {

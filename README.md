@@ -60,7 +60,28 @@ Key environment variables:
 - `LND_MACAROON_PATH`: Path to LND macaroon file (optional)
 - `LND_TLS_CERT_PATH`: Path to LND TLS certificate (optional)
 - `PORT`: Server port (default: 8080)
+- `HOST`: Bind address (default: 0.0.0.0 for external access, use localhost for local only)
 - `STORAGE_PATH`: File storage directory (default: ./storage)
+
+### Network Access
+
+To make the relay accessible from other computers:
+
+1. Set `HOST=0.0.0.0` in your `.env` file (default)
+2. Find your computer's IP address: `ip addr show` (Linux) or `ifconfig` (macOS)
+3. Access from other computers using: `http://<your-ip>:8080`
+
+**Important**: Make sure port 8080 is not blocked by your firewall:
+```bash
+# Ubuntu/Debian
+sudo ufw allow 8080
+
+# macOS
+# System Settings → Network → Firewall → Allow port 8080
+
+# Windows
+# Windows Defender Firewall → Allow app through firewall
+```
 
 ## API Endpoints
 
