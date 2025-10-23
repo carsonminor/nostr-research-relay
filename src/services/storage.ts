@@ -63,6 +63,7 @@ Event ID: ${eventId}
 Title: ${metadata.title || 'Untitled'}
 Authors: ${metadata.authors ? metadata.authors.join(', ') : 'Unknown'}
 Submitted: ${new Date().toISOString()}
+Published: ${metadata.published_at || 'Not published'}
 Status: ${metadata.status || 'submitted'}
 Size: ${Buffer.byteLength(content, 'utf8')} bytes
 ---
@@ -126,8 +127,17 @@ Size: ${Buffer.byteLength(content, 'utf8')} bytes
 
     for (const filePath of locations) {
       try {
-        const content = await fs.readFile(filePath, 'utf8');
-        return content;
+        const rawContent = await fs.readFile(filePath, 'utf8');
+        
+        // Strip metadata header if present
+        if (rawContent.startsWith('---\n')) {
+          const endOfHeader = rawContent.indexOf('\n---\n\n');
+          if (endOfHeader !== -1) {
+            return rawContent.substring(endOfHeader + 5); // Skip the header and separator
+          }
+        }
+        
+        return rawContent;
       } catch {
         continue;
       }

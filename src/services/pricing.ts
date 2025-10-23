@@ -16,35 +16,34 @@ export class PricingService {
   }
 
   async calculatePrice(sizeBytes: number, durationYears: number = 1): Promise<PriceCalculation> {
-    const pricePerMbYear = parseInt(await this.db.getConfig('price_per_mb_year') || '1000');
+    // Flat rate pricing for testing - always 1 sat
+    const flatRate = parseInt(await this.db.getConfig('flat_rate_sats') || '1');
     const sizeMb = sizeBytes / (1024 * 1024);
-    const amountSats = Math.ceil(sizeMb * pricePerMbYear * durationYears);
 
     return {
-      amount_sats: amountSats,
+      amount_sats: flatRate,
       size_mb: sizeMb,
       duration_years: durationYears,
-      description: `Storage for ${sizeMb.toFixed(2)}MB for ${durationYears} year(s)`
+      description: `Research paper publication fee (flat rate)`
     };
   }
 
   async calculateCommentPrice(sizeBytes: number): Promise<PriceCalculation> {
-    const pricePerMb = parseInt(await this.db.getConfig('price_per_comment_mb') || '100');
+    // Flat rate for comments too - always 1 sat
+    const flatRate = parseInt(await this.db.getConfig('flat_rate_sats') || '1');
     const sizeMb = sizeBytes / (1024 * 1024);
-    const amountSats = Math.ceil(sizeMb * pricePerMb);
 
     return {
-      amount_sats: Math.max(amountSats, 1), // Minimum 1 sat
+      amount_sats: flatRate,
       size_mb: sizeMb,
       duration_years: 1,
-      description: `Comment storage for ${sizeMb.toFixed(4)}MB`
+      description: `Comment publication fee (flat rate)`
     };
   }
 
   async getPricingInfo(): Promise<PricingInfo> {
-    const [pricePerMbYear, pricePerCommentMb, maxContentSize] = await Promise.all([
-      this.db.getConfig('price_per_mb_year'),
-      this.db.getConfig('price_per_comment_mb'),
+    const [flatRate, maxContentSize] = await Promise.all([
+      this.db.getConfig('flat_rate_sats'),
       this.db.getConfig('max_content_size')
     ]);
 
@@ -52,8 +51,8 @@ export class PricingService {
     const storageAvailableMb = await this.calculateAvailableStorage();
 
     return {
-      price_per_mb_year: parseInt(pricePerMbYear || '1000'),
-      price_per_comment_mb: parseInt(pricePerCommentMb || '100'),
+      price_per_mb_year: parseInt(flatRate || '1'), // Show flat rate as the price
+      price_per_comment_mb: parseInt(flatRate || '1'),
       max_content_size: parseInt(maxContentSize || '52428800'),
       storage_available_mb: storageAvailableMb
     };

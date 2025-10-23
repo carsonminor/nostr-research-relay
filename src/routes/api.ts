@@ -179,11 +179,12 @@ export function createApiRoutes(
       const papers = await db.getResearchPapers();
       const paper = papers.find(p => p.event_id === event_id);
       
-      if (!paper || paper.status !== 'published') {
-        return res.status(404).json({ error: 'Paper not found or not published' });
+      if (!paper) {
+        return res.status(404).json({ error: 'Paper not found' });
       }
 
-      const content = await storage.getContent(event_id);
+      // For testing, allow any status (not just published)
+      const content = await storage.getContent(event_id, 'paper');
       if (!content) {
         return res.status(404).json({ error: 'Content not found' });
       }
@@ -194,10 +195,82 @@ export function createApiRoutes(
         authors: paper.authors,
         abstract: paper.abstract,
         content,
-        published_at: paper.published_at
+        published_at: paper.published_at,
+        size_bytes: paper.size_bytes
       });
     } catch (error) {
+      console.error('Error getting paper content:', error);
       res.status(500).json({ error: 'Failed to get paper content' });
+    }
+  });
+
+  // Get highlights and comments for a paper
+  router.get('/papers/:event_id/highlights', async (req, res) => {
+    try {
+      const { event_id } = req.params;
+      console.log('Getting highlights for paper:', event_id);
+      
+      // Get all highlights for this paper (kind 9802)
+      const highlights = await db.dbAll(`
+        SELECT * FROM events 
+        WHERE kind = 9802 
+        AND tags LIKE '%["e","' || ? || '"]%'
+        ORDER BY created_at DESC
+      `, [event_id]);
+      
+      console.log('Found highlights:', highlights.length);
+      console.log('Sample highlight tags:', highlights[0]?.tags);
+
+      // Get all comments on highlights (kind 1)
+      const highlightIds = highlights.map(h => h.id);
+      const comments = await db.dbAll(`
+        SELECT * FROM events 
+        WHERE kind = 1 
+        AND tags LIKE '%"e"%'
+        ORDER BY created_at DESC
+      `);
+
+      // Get reactions (kind 7)
+      const reactions = await db.dbAll(`
+        SELECT * FROM events 
+        WHERE kind = 7 
+        ORDER BY created_at DESC
+      `);
+
+      // Group comments by highlight
+      const highlightsWithComments = highlights.map(highlight => {
+        const highlightComments = comments.filter(comment => {
+          const tags = JSON.parse(comment.tags);
+          return tags.some((tag: string[]) => tag[0] === 'e' && tag[1] === highlight.id);
+        });
+
+        const commentsWithReactions = highlightComments.map(comment => {
+          const commentReactions = reactions.filter(reaction => {
+            const tags = JSON.parse(reaction.tags);
+            return tags.some((tag: string[]) => tag[0] === 'e' && tag[1] === comment.id);
+          });
+
+          return {
+            ...comment,
+            tags: JSON.parse(comment.tags),
+            reactions: commentReactions.map(r => ({
+              ...r,
+              tags: JSON.parse(r.tags)
+            }))
+          };
+        });
+
+        return {
+          ...highlight,
+          tags: JSON.parse(highlight.tags),
+          comments: commentsWithReactions
+        };
+      });
+
+      res.json(highlightsWithComments);
+    } catch (error) {
+      console.error('Error getting highlights:', error);
+      res.status(500).json({ error: 'Failed to get highlights' });
     }
   });
 

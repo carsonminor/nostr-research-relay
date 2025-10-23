@@ -55,7 +55,25 @@ export class NostrService {
         return;
       }
 
-      // Check if it's a comment (kind 1111)
+      // Check if it's a highlight (kind 9802 - NIP-84)
+      if (event.kind === 9802) {
+        await this.handleHighlight(ws, event);
+        return;
+      }
+
+      // Check if it's a comment reply (kind 1)
+      if (event.kind === 1) {
+        await this.handleCommentReply(ws, event);
+        return;
+      }
+
+      // Check if it's a reaction (kind 7 - NIP-25)
+      if (event.kind === 7) {
+        await this.handleReaction(ws, event);
+        return;
+      }
+
+      // Check if it's a comment (kind 1111 - legacy)
       if (event.kind === 1111) {
         await this.handleComment(ws, event);
         return;
@@ -85,20 +103,47 @@ export class NostrService {
     // Extract metadata from tags
     const title = this.getTagValue(event.tags, 'title') || 'Untitled';
     const summary = this.getTagValue(event.tags, 'summary') || '';
+    const paymentHash = this.getTagValue(event.tags, 'payment_hash');
     
-    // Calculate price and create invoice
+    // Calculate price
     const priceInfo = await this.pricing.calculatePrice(contentSize);
     
-    // For now, mark as submitted - will require payment before acceptance
+    // Check if payment is required (free for testing if price is 0)
+    if (priceInfo.amount_sats > 0) {
+      if (!paymentHash) {
+        this.sendOK(ws, event.id, false, `Payment required: ${priceInfo.amount_sats} sats. Create invoice first.`);
+        return;
+      }
+
+      // Verify payment
+      const invoice = await this.db.getInvoice(paymentHash);
+      if (!invoice) {
+        this.sendOK(ws, event.id, false, 'Invalid payment hash');
+        return;
+      }
+
+      if (!invoice.paid) {
+        this.sendOK(ws, event.id, false, 'Payment not completed');
+        return;
+      }
+
+      if (invoice.amount_sats < priceInfo.amount_sats) {
+        this.sendOK(ws, event.id, false, 'Insufficient payment amount');
+        return;
+      }
+    }
+    
+    // Payment verified or not required - save the paper
     await this.db.saveResearchPaper({
       event_id: event.id,
       title,
       authors: [event.pubkey],
       abstract: summary,
-      status: 'submitted',
+      status: 'published', // Auto-publish if payment is verified
       size_bytes: contentSize,
-      payment_hash: undefined,
-      price_paid: undefined
+      payment_hash: paymentHash,
+      price_paid: priceInfo.amount_sats,
+      published_at: new Date(event.created_at * 1000)
     });
 
     // Save to organized storage with metadata
@@ -106,13 +151,67 @@ export class NostrService {
       title,
       authors: [event.pubkey],
       abstract: summary,
-      status: 'submitted'
+      status: 'published',
+      published_at: new Date(event.created_at * 1000).toISOString(),
+      payment_hash: paymentHash,
+      price_paid: priceInfo.amount_sats
     };
     await this.storage.saveResearchPaper(event.id, event.content, metadata);
 
-    // Send pricing info back to client
-    this.sendMessage(ws, ['NOTICE', `Paper submitted. Price: ${priceInfo.amount_sats} sats. Use /get-invoice endpoint to pay.`]);
+    // Save the actual Nostr event to events table
+    await this.db.saveEvent(event);
+
+    console.log(`📄 Saved research paper: ${event.id}.md`);
+    this.sendOK(ws, event.id, true, 'Paper published successfully');
+    
+    // Broadcast to subscribers
+    await this.broadcastEvent(event);
+  }
+
+  private async handleHighlight(ws: WebSocket, event: NostrEvent): Promise<void> {
+    // NIP-84 highlights are free to encourage engagement
+    await this.db.saveEvent(event);
     this.sendOK(ws, event.id, true);
+    
+    // Broadcast to subscribers
+    await this.broadcastEvent(event);
+    
+    console.log(`📝 Highlight created: ${event.id.substring(0, 8)} - "${event.content}"`);
+  }
+
+  private async handleCommentReply(ws: WebSocket, event: NostrEvent): Promise<void> {
+    // Kind 1 replies to highlights - charge for storage
+    const contentSize = calculateContentSize(event.content);
+    const commentPrice = await this.pricing.calculateCommentPrice(contentSize);
+
+    // Save comment to organized storage
+    const highlightEventTag = this.getTagValue(event.tags, 'e');
+    const metadata = {
+      highlightEvent: highlightEventTag,
+      author: event.pubkey,
+      type: 'highlight_comment'
+    };
+    await this.storage.saveComment(event.id, event.content, metadata);
+
+    await this.db.saveEvent(event);
+    this.sendOK(ws, event.id, true);
+    
+    // Broadcast to subscribers
+    await this.broadcastEvent(event);
+    
+    this.sendMessage(ws, ['NOTICE', `Comment posted. Fee: ${commentPrice.amount_sats} sats.`]);
+    console.log(`💬 Comment on highlight: ${event.id.substring(0, 8)}`);
+  }
+
+  private async handleReaction(ws: WebSocket, event: NostrEvent): Promise<void> {
+    // NIP-25 reactions are free
+    await this.db.saveEvent(event);
+    this.sendOK(ws, event.id, true);
+    
+    // Broadcast to subscribers
+    await this.broadcastEvent(event);
+    
+    console.log(`👍 Reaction: ${event.content} on ${this.getTagValue(event.tags, 'e')?.substring(0, 8)}`);
   }
 
   private async handleComment(ws: WebSocket, event: NostrEvent): Promise<void> {

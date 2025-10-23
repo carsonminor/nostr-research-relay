@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { SQLiteDatabase as Database } from './db/sqlite';
 import { NostrService } from './services/nostr';
 import { PricingService } from './services/pricing';
-import { LightningService } from './services/lightning';
+import { LightningService, NWCConfig } from './services/lightning';
 import { StorageService } from './services/storage';
 import { createApiRoutes } from './routes/api';
 import { createAdminRoutes } from './routes/admin';
@@ -35,11 +35,16 @@ class NostrResearchRelay {
     this.db = new Database(dbPath);
     this.pricing = new PricingService(this.db);
     this.storage = new StorageService(process.env.STORAGE_PATH);
+    // Set up NWC configuration if available
+    const nwcConfig: NWCConfig | undefined = process.env.NWC_CONNECTION_STRING ? 
+      { connectionString: process.env.NWC_CONNECTION_STRING } : 
+      undefined;
+
     this.lightning = new LightningService({
       host: process.env.LND_HOST || 'localhost:8080',
       macaroonPath: process.env.LND_MACAROON_PATH || '/dev/null',
       tlsCertPath: process.env.LND_TLS_CERT_PATH || '/dev/null'
-    });
+    }, nwcConfig);
     this.nostr = new NostrService(this.db, this.pricing, this.storage);
   }
 

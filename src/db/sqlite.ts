@@ -153,8 +153,8 @@ export class SQLiteDatabase {
   async saveResearchPaper(paper: Omit<ResearchPaper, 'id' | 'created_at'>): Promise<string> {
     const id = require('crypto').randomUUID();
     await this.dbRun(`
-      INSERT INTO research_papers (id, event_id, title, authors, abstract, status, size_bytes, payment_hash, price_paid, file_path)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO research_papers (id, event_id, title, authors, abstract, status, size_bytes, payment_hash, price_paid, file_path, published_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       paper.event_id,
@@ -165,7 +165,8 @@ export class SQLiteDatabase {
       paper.size_bytes,
       paper.payment_hash,
       paper.price_paid,
-      `./storage/${paper.event_id}.md`
+      `./storage/${paper.event_id}.md`,
+      paper.published_at ? paper.published_at.toISOString() : null
     ]);
     
     return id;
